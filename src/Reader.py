@@ -47,7 +47,6 @@ class BytesSource(ABC):
     def eof(self):
         return self.GetIsEOF()
 
-
 class BusReader(BytesSource):
     def __init__(self, addressBus : hw.OutputBus, dataBus: hw.InputBus):
         self._addressBus = addressBus
