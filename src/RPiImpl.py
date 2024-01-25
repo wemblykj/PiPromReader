@@ -9,10 +9,6 @@ import os
 
 import Hardware
 
-class Bus:
-    def Reset(self):
-        pass
-        
 class GpioBus(Bus):
      def __init__(self, pins, dir):
         self.busWidth = len(pins)

@@ -5,8 +5,6 @@ import os
 import binascii
 import hashlib
 
-from abc import ABC, abstractmethod
-
 from Reader import BytesSink
 
 class ByteHasher(ByteSync)
