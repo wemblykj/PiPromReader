@@ -3,9 +3,9 @@ import os
 
 sys.path.insert(0, os.path.abspath('../src'))
  
-from HexDumper import HexDumper, HexDumperOptions
+from HexDumper import HexDumper, Options, Layout
 
-def TestDumper(options : HexDumperOptions = HexDumperOptions()):
+def TestDumper(options : Options = Options()):
     with HexDumper(sys.stdout, options) as hexDumper:
 
         for i in range(0, 250):
@@ -13,7 +13,8 @@ def TestDumper(options : HexDumperOptions = HexDumperOptions()):
 
 def main():
     TestDumper()
-    TestDumper(HexDumperOptions(columnsPerLine=32, showAscii=False))
+    TestDumper(Options(columnsPerLine=32, layoutFlags=Layout.NOASCII))
+    TestDumper(Options(columnsPerLine=32, layoutFlags=Layout.ASCII))
 
 if __name__ == "__main__":
     main() 

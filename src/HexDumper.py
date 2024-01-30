@@ -3,20 +3,26 @@
 import sys
 import os
 
+#from flags import Flags
+from enum import Flag
+
 from Core import Disposable
 from Reader import BytesSink
 
-class HexDumperOptions():
-    def __init__(self, columnsPerLine = 16, showAscii = True):
-        self.columnsPerLine = columnsPerLine
-        self.showAscii = showAscii
+class Layout(Flag):
+    ADDRESS = 1
+    HEXDUMP = 2
+    ASCII = 4
+    NOASCII = 3
+    DEFAULT = 7
 
-    @classmethod
-    def fromArgs(cls, args):
-        pass
+class Options():
+    def __init__(self, columnsPerLine = 16, layoutFlags : Layout = Layout.DEFAULT):
+      self.columnsPerLine = columnsPerLine
+      self.layoutFlags = layoutFlags
 
 class HexDumper(BytesSink, Disposable):
-    def __init__(self, ostream, options : HexDumperOptions = HexDumperOptions()):
+    def __init__(self, ostream, options : Options = Options()):
         super(HexDumper, self).__init__()
         self.options = options
         self.os = ostream
@@ -42,11 +48,12 @@ class HexDumper(BytesSink, Disposable):
             self._WriteLine(self._offset, self._buffer)
 
     def _WriteLine(self, offset, data):
-        # Convert Address to ASCII hexadecimal
-        offsetAsHex="%0.8X"% offset
+        if self.options.layoutFlags & Layout.ADDRESS:
+            # Convert Address to ASCII hexadecimal
+            offsetAsHex="%0.8X"% offset
 
-        # Print line start address
-        print(offsetAsHex,"",end=" ", file=self.os)
+            # Print line start address
+            print(offsetAsHex,"",end=" ", file=self.os)
 
         #Clear the line buffers
         hexLine=""
@@ -60,10 +67,12 @@ class HexDumper(BytesSink, Disposable):
 
             if (column<count):
                 byte = data[column]
-                dataAsHex="%0.2X "% int(byte)
-                hexLine += dataAsHex
 
-                if self.options.showAscii:
+                if self.options.layoutFlags & Layout.HEXDUMP:
+                    dataAsHex="%0.2X "% int(byte)
+                    hexLine += dataAsHex
+
+                if self.options.layoutFlags & Layout.ASCII:
                     byteAsInt = int(byte)
                     if (byteAsInt>31 & byteAsInt <128):
                         asciiLine += chr(byteAsInt)
@@ -71,11 +80,14 @@ class HexDumper(BytesSink, Disposable):
                     else:
                         asciiLine += "."
             else:
-                hexLine += "   "
+                if self.options.layoutFlags & Layout.HEXDUMP:
+                    hexLine += "   "
 
-        print(hexLine,end=" ", file=self.os)
+        print(hexLine, end="", file=self.os)
 
-        if self.options.showAscii:
-            print(asciiLine, file=self.os)
-        else:
-            print()
+        if self.options.layoutFlags & Layout.ASCII:
+            if self.options.layoutFlags & Layout.HEXDUMP:
+                print(" ", end="")
+            print(asciiLine, end="", file=self.os)
+            
+        print()
