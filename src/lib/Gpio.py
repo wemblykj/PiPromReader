@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import time
 
 from abc import ABC, abstractmethod
 
@@ -25,12 +26,16 @@ class Gpio(ABC):
 class GpioBusBase(ABC):
     def __init__(self, hal, pins, dir):
         self._hal = hal
-        self._busWidth = len(pins)
+        self._width = len(pins)
+        self._upperbound = 2 ** self._width
         self._pins = pins
         self._setDirection(dir)
        
     def GetWidth(self):
-        return self._busWidth
+        return self._width
+
+    def GetUpperbound(self):
+        return self._upperbound
 
     def _setDirection(self, dir):
         hal = self._hal
@@ -44,6 +49,9 @@ class InputGpioBus(InputBus, GpioBusBase):
 
     def GetWidth(self):
         return GpioBusBase.GetWidth(self)
+
+    def GetUpperbound(self):
+        return GpioBusBase.GetUpperbound(self)
 
     def Reset(self):
         pass
@@ -70,13 +78,16 @@ class OutputGpioBus(OutputBus, GpioBusBase):
     def GetWidth(self):
         return GpioBusBase.GetWidth(self)
 
+    def GetUpperbound(self):
+        return GpioBusBase.GetUpperbound(self)
+
     def Reset(self):
         self._dataLast = None
         self.Write(0)
         
     def Write(self, data):
         bitMask=1
-        for bitCounter in range (0,self._busWidth):
+        for bitCounter in range (0,self._width):
             maskedState = data & bitMask
             desiredState = maskedState >> bitCounter
             stateChanged = self._dataLast == None
@@ -96,39 +107,52 @@ class OutputGpioBus(OutputBus, GpioBusBase):
         return self._hal.WriteGpio(pin, state)
 
 class CounterBasedAddressBus(OutputBus):
-    def __init__(self, hal, frequency, resetPin, clockPin):
+    def __init__(self, hal, width, frequency, resetPin, clockPin, loadPin = None):
         self._hal = hal
-        self.halfPeriod = 0.5 / frequency
+        self._halfPeriod = 0.5 / frequency
+        self._width = width
+        self._upperbound = 2 ** width
+        self._end = 1 << width
+        self._resetPin = resetPin
+        self._clockPin = clockPin
+        self._loadPin = loadPin
         self._hal.ConfigureGpio(resetPin, Gpio.OUTPUT)
         self._hal.ConfigureGpio(clockPin, Gpio.OUTPUT)
-        self._hal.ConfigureGpio(loadPin, Gpio.OUTPUT)
+        if loadPin != None:
+            self._hal.ConfigureGpio(loadPin, Gpio.OUTPUT)
         self.Reset()
 
+    def GetWidth(self):
+        return self._width
+
+    def GetUpperbound(self):
+        return self._upperbound
+
     def Reset(self):
-        self._hal.WriteGpio(resetPin,1)
-        self._hal.WriteGpio(clockPin,0)
-        self._hal.WriteGpio(loadPin,1)
-        self._hal.WriteGpio(resetPin,0)
-        self._pulse()
-        self._hal.WriteGpio(resetPin,0)
-        self.lastValue = 0
+        self._pulseReset()
+        self._lastValue = 0
     
     def Write(self, value):
-        delta = value - self.lastValue
+        delta = value - self._lastValue
         if (delta > 1):
             self._seek(delta, os.SEEK_CUR)
         else:
             self._seek(value)
         
-    def _pulse(self):
-        self._hal.WriteGpio(clockPin,1)
-        time.sleep(self.halfPeriod)
-        self._hal.WriteGpio(clockPin,0)
-        time.sleep(self.halfPeriod)
+    def _pulseReset(self):
+        self._hal.WriteGpio(self._resetPin,0)
+        self._pulseClock()
+        self._hal.WriteGpio(self._resetPin,1)
+
+    def _pulseClock(self):
+        self._hal.WriteGpio(self._clockPin,1)
+        time.sleep(self._halfPeriod)
+        self._hal.WriteGpio(self._clockPin,0)
+        time.sleep(self._halfPeriod)
         
     def _step(self):
-        self._pulse()
-        self.lastValue += 1
+        self._pulseClock()
+        self._lastValue += 1
         
     def _seek(self, offset, whence = os.SEEK_SET):
         # TODO: support counter load - for now we do things the long way
@@ -136,7 +160,7 @@ class CounterBasedAddressBus(OutputBus):
         if whence == os.SEEK_SET:
             value = offset
         elif whence == os.SEEK_CUR:
-            value = self.lastValue + offset
+            value = self._lastValue + offset
         elif whence == os.SEEK_END:
             raise NotImplementedError
 
@@ -148,16 +172,23 @@ class CounterBasedAddressBus(OutputBus):
         #    case os.SEEK_END:
         #        raise NotImplementedError
         
-        if (value > self.lastValue):
-            steps = self.lastValue - value
-        else:
-            steps = value
+        if (value > self._lastValue):
+            steps = value - self._lastValue
+        elif (value < self._lastValue):
             # Reset the counter
-            self.Reset()
+            self._pulseReset()
+            # step from zero
+            steps = value
+        else:
+            steps = 0
             
-        # Pulse until the value is reached
-        for s in range(0, value):
-            self._pulse(self)
+        #print("current: {}".format(self._lastValue))
+        #print("value: {}".format(value))
+        #print("steps: {}".format(steps))
 
-        self.lastValue = value
+        # Pulse until the value is reached
+        for s in range(0, steps):
+            self._pulseClock()
+
+        self._lastValue = value
         

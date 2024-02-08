@@ -1,7 +1,7 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.abspath('../src'))
+sys.path.insert(0, os.path.abspath('../lib'))
  
 from Hardware import InputBus, OutputBus
 from BusReader import BusReader
@@ -15,6 +15,9 @@ class MockOutputBus(OutputBus):
 
     def GetWidth(self):
         return 4
+
+    def GetUpperbound(self):
+        return 16
 
     def GetData(self):
         return self.data
@@ -31,6 +34,9 @@ class MockInputBus(InputBus):
 
     def GetWidth(self):
         return 8
+
+    def GetUpperbound(self):
+        return 256
 
 def main():
     outBus = MockOutputBus()

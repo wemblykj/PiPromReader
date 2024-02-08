@@ -9,9 +9,17 @@ class Bus(ABC):
     def GetWidth(self):
         pass
 
+    @abstractmethod
+    def GetUpperbound(self):
+        pass
+
     @property
     def width(self):
         return self.GetWidth()
+
+    @property
+    def upperbound(self):
+        return self.GetUpperbound()
 
 class InputBus(Bus):
     @abstractmethod
