@@ -3,16 +3,25 @@
 import os
 import time
 
+from enum import Enum
+
 from abc import ABC, abstractmethod
 
+from Core import Disposable
 from Hardware import InputBus, OutputBus
 
-class Gpio(ABC):
+class Direction(Enum):
     INPUT = 1
     OUTPUT = 0
 
+class State(Enum):
+    HIGH = 1
+    LOW = 0
+
+class Gpio(ABC):
+
     @abstractmethod
-    def ConfigureGpio(self, pin, dir):
+    def ConfigureGpio(self, pin, dir : Direction):
         pass
 
     @abstractmethod
@@ -20,11 +29,11 @@ class Gpio(ABC):
         pass
 
     @abstractmethod
-    def WriteGpio(self, pin, state):
+    def WriteGpio(self, pin, state : State):
         pass
 
 class GpioBusBase(ABC):
-    def __init__(self, hal, pins, dir):
+    def __init__(self, hal, pins, dir : Direction):
         self._hal = hal
         self._width = len(pins)
         self._upperbound = 2 ** self._width
@@ -37,14 +46,14 @@ class GpioBusBase(ABC):
     def GetUpperbound(self):
         return self._upperbound
 
-    def _setDirection(self, dir):
+    def _setDirection(self, dir : Direction):
         hal = self._hal
         for pin in self._pins: 
             hal.ConfigureGpio(pin, dir)
  
 class InputGpioBus(InputBus, GpioBusBase):
     def __init__(self, hal, pins):
-        super().__init__(hal, pins, Gpio.INPUT)
+        super().__init__(hal, pins, Direction.INPUT)
         self.Reset()
 
     def GetWidth(self):
@@ -60,7 +69,7 @@ class InputGpioBus(InputBus, GpioBusBase):
         bitValue=1
         data = 0
         for bitCounter in range (0, self.width):
-            if (self._readBit(bitCounter)):
+            if self._readBit(bitCounter) == State.HIGH:
                 data += bitValue
             bitValue=(bitValue<<1)    
         
@@ -70,11 +79,14 @@ class InputGpioBus(InputBus, GpioBusBase):
         pin = self._pins[bit]
         return self._hal.ReadGpio(pin)
  
-class OutputGpioBus(OutputBus, GpioBusBase):
+class OutputGpioBus(OutputBus, GpioBusBase, Disposable):
     def __init__(self, hal, pins):
-        super().__init__(hal, pins, Gpio.OUTPUT)
+        super().__init__(hal, pins, Direction.OUTPUT)
         self.Reset()
-        
+    
+    def _OnDispose(self):
+        self.Reset()
+
     def GetWidth(self):
         return GpioBusBase.GetWidth(self)
 
@@ -96,7 +108,7 @@ class OutputGpioBus(OutputBus, GpioBusBase):
                 stateChanged = (self._dataLast & bitMask) != maskedState
 
             if stateChanged:
-                self._writeBit(bitCounter, desiredState)
+                self._writeBit(bitCounter, State.HIGH if desiredState else State.LOW)
 
             bitMask=(bitMask<<1)
 
@@ -106,7 +118,7 @@ class OutputGpioBus(OutputBus, GpioBusBase):
         pin = self._pins[bit]
         return self._hal.WriteGpio(pin, state)
 
-class CounterBasedAddressBus(OutputBus):
+class CounterBasedAddressBus(OutputBus, Disposable):
     def __init__(self, hal, width, frequency, resetPin, clockPin, loadPin = None):
         self._hal = hal
         self._halfPeriod = 0.5 / frequency
@@ -116,10 +128,13 @@ class CounterBasedAddressBus(OutputBus):
         self._resetPin = resetPin
         self._clockPin = clockPin
         self._loadPin = loadPin
-        self._hal.ConfigureGpio(resetPin, Gpio.OUTPUT)
-        self._hal.ConfigureGpio(clockPin, Gpio.OUTPUT)
+        self._hal.ConfigureGpio(resetPin, Direction.OUTPUT)
+        self._hal.ConfigureGpio(clockPin, Direction.OUTPUT)
         if loadPin != None:
-            self._hal.ConfigureGpio(loadPin, Gpio.OUTPUT)
+            self._hal.ConfigureGpio(loadPin, Direction.OUTPUT)
+        self.Reset()
+
+    def _OnDispose(self):
         self.Reset()
 
     def GetWidth(self):
@@ -134,20 +149,20 @@ class CounterBasedAddressBus(OutputBus):
     
     def Write(self, value):
         delta = value - self._lastValue
-        if (delta > 1):
+        if delta > 1:
             self._seek(delta, os.SEEK_CUR)
         else:
             self._seek(value)
         
     def _pulseReset(self):
-        self._hal.WriteGpio(self._resetPin,0)
+        self._hal.WriteGpio(self._resetPin,State.LOW)
         self._pulseClock()
-        self._hal.WriteGpio(self._resetPin,1)
+        self._hal.WriteGpio(self._resetPin,State.HIGH)
 
     def _pulseClock(self):
-        self._hal.WriteGpio(self._clockPin,1)
+        self._hal.WriteGpio(self._clockPin,State.HIGH)
         time.sleep(self._halfPeriod)
-        self._hal.WriteGpio(self._clockPin,0)
+        self._hal.WriteGpio(self._clockPin,State.LOW)
         time.sleep(self._halfPeriod)
         
     def _step(self):
@@ -172,9 +187,9 @@ class CounterBasedAddressBus(OutputBus):
         #    case os.SEEK_END:
         #        raise NotImplementedError
         
-        if (value > self._lastValue):
+        if value > self._lastValue:
             steps = value - self._lastValue
-        elif (value < self._lastValue):
+        elif value < self._lastValue:
             # Reset the counter
             self._pulseReset()
             # step from zero
