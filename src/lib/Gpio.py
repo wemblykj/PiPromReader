@@ -121,7 +121,10 @@ class OutputGpioBus(OutputBus, GpioBusBase, Disposable):
 class CounterBasedAddressBus(OutputBus, Disposable):
     def __init__(self, hal, width, frequency, resetPin, clockPin, loadPin = None):
         self._hal = hal
-        self._halfPeriod = 0.5 / frequency
+        if frequency > 0:
+            self._halfPeriod = 0.5 / frequency
+        else:
+            self._halfPeriod = 0
         self._width = width
         self._upperbound = 2 ** width
         self._end = 1 << width
@@ -161,9 +164,11 @@ class CounterBasedAddressBus(OutputBus, Disposable):
 
     def _pulseClock(self):
         self._hal.WriteGpio(self._clockPin,State.HIGH)
-        time.sleep(self._halfPeriod)
+        if self._halfPeriod > 0:
+            time.sleep(self._halfPeriod)
         self._hal.WriteGpio(self._clockPin,State.LOW)
-        time.sleep(self._halfPeriod)
+        if self._halfPeriod > 0:
+            time.sleep(self._halfPeriod)
         
     def _step(self):
         self._pulseClock()

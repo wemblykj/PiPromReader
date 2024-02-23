@@ -10,6 +10,9 @@ from RPiGpio import RPiGpio
 
 from MockGpio import MockGpio
 
+from BusReader import BusReader
+from HexDumper import HexDumper
+
 import curses
 from curses import wrapper
 from curses.textpad import Textbox, rectangle
@@ -28,10 +31,10 @@ AddressPins = (10,9,11,25)
 #DataPins = (14,15,18,17,27,22,23,24)
 DataPins = (17,27,22,11,5,6,13,19)
 
-Width = 4
-Freq = 5 # 5hz
-ClockPin = 9
-ResetPin = 10
+Width = 20
+Freq = 0 #8000 #50 # 5hz
+ClockPin = 14 #9
+ResetPin = 15
 
 #ChipEnable = 3
 #OutputEnable = 4
@@ -57,20 +60,27 @@ def main(stdscr):
     #stdscr.box()
     #editwin = curses.newwin()
     #editwin.refresh()
-    #gpio = RPiGpio()
+    gpio = RPiGpio()
     #gpio = MockGpio(MyIO(screen))
-    gpio = MockGpio(sys.stdout)
+    #gpio = MockGpio(sys.stdout)
 
     dataBus = InputGpioBus(gpio, DataPins)
 
     #addressBus = OutputGpioBus(gpio, AddressPins)
 
-    addressBus = CounterBasedAddressBus(gpio, Width, Freq, ClockPin, ResetPin)
+    addressBus = CounterBasedAddressBus(gpio, Width, Freq, ResetPin, ClockPin)
 
-    for offset in range(0, addressBus.upperbound):
-        addressBus.Write(offset)
-        data = dataBus.Read()
-        print("{}: {}".format(offset, data))
+    busReader = BusReader(addressBus, dataBus)
+    hexDumper = HexDumper(sys.stdout)
+
+    blockSize = 16
+    upperBound = 1024 #addressBus.upperbound
+    offset = 0
+    while offset < upperBound:
+        block = busReader.Read(blockSize)
+        hexDumper.Write(block)
+        offset += blockSize
+
 
 if __name__ == "__main__":
     main(None) 
