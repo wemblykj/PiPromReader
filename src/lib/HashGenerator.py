@@ -5,22 +5,24 @@ import os
 import binascii
 import hashlib
 
-from Reader import BytesSink
+from abc import abstractmethod
 
-class ByteHasher(ByteSync)
+from BytesReader import BytesSink
+
+class BytesHasher(BytesSink):
     @abstractmethod
     def Reset(self):
         pass
 
     @abstractmethod
-    def GetDigest()
+    def GetDigest(self):
         pass
 
     @abstractmethod
-    def GetHexDigest()
+    def GetHexDigest(self):
         pass
 
-class Crc32Hasher(ByteHasher):
+class Crc32Hasher(BytesHasher):
     def __init__(self):
         self.Reset()
     
@@ -33,13 +35,13 @@ class Crc32Hasher(ByteHasher):
     def Write(self, data):
         self.crc32 = binascii.crc32(data, self.crc32)
             
-    def GetDigest()
+    def GetDigest(self):
         return self.crc32
 
-    def GetHexDigest()
+    def GetHexDigest(self):
         pass
 
-class HashlibHasher(ByteHasher):
+class HashlibHasher(BytesHasher):
     def __init__(self, name):
         self.name = name
         self.Reset()
@@ -53,10 +55,10 @@ class HashlibHasher(ByteHasher):
     def Write(self, data):
         self.hasher.update(data)
             
-    def GetDigest()
+    def GetDigest(self):
         return self.hasher.digest()
 
-    def GetHexDigest()
+    def GetHexDigest(self):
         return self.hasher.hexdigest()
 
 class HashingCollective(BytesSink):

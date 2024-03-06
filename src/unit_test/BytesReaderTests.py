@@ -3,7 +3,8 @@ import os
 
 sys.path.insert(0, os.path.abspath('../lib'))
  
-from Reader import BytesSink, BytesSource, Reader
+from BytesReader import BytesSink, BytesSource, BytesReader
+from Ux import ProgressReporter
 
 class MockBytesSink(BytesSink):
     def __init__(self):
@@ -36,7 +37,7 @@ class MockBytesSource(BytesSource):
             self._offset = self._upperBound - offset
 
     def Read(self, size):
-        data = []
+        data = bytearray()
 
         size = min(size, self._upperBound - self._offset)
         offset = self._offset
@@ -53,13 +54,24 @@ class MockBytesSource(BytesSource):
     def GetIsEOF(self):
         return self._eof
 
+class MockProgressReporter(ProgressReporter):
+    def __init__(self, width = 16):
+        self._width = int(100/width)
+        self._lastPercent = 0
+
+    def Progress(self, percent : int):
+        for i in range(0, int((int(percent) - self._lastPercent)/self._width)):
+            print("#", end="")
+        self._lastPercent = int(percent)
+
 def main():
     sink = MockBytesSink()
-
     source = MockBytesSource(256)
+    reporter = MockProgressReporter()
 
-    with Reader(source, 16) as reader:
+    with BytesReader(source, 16) as reader:
         reader.AddSink(sink)
+        reader.AddProgressReporter(reporter)
 
         reader.Seek(64, os.SEEK_END)
 

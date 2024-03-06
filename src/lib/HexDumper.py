@@ -7,7 +7,7 @@ import os
 from enum import Flag
 
 from Core import Disposable
-from Reader import BytesSink
+from BytesReader import BytesSink
 
 class Layout(Flag):
     ADDRESS = 1

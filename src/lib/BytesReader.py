@@ -5,6 +5,7 @@ import os
 from abc import ABC, abstractmethod
 
 from Core import Disposable
+from Ux import ProgressReporter
 
 class BytesSink(ABC):
     @abstractmethod    
@@ -14,6 +15,13 @@ class BytesSink(ABC):
     @abstractmethod    
     def Write(self, data):
         pass
+
+class MyBytesSink(BytesSink):
+    def Reset(self):
+        print("hello")
+
+    def Write(self, value):
+        print("there!", value)
 
 class BytesSource(ABC):
     @abstractmethod    
@@ -36,12 +44,13 @@ class BytesSource(ABC):
     def eof(self):
         return self.GetIsEOF()
 
-class Reader(Disposable):
+class BytesReader(Disposable):
     def __init__(self, source : BytesSource, blockSize):
         super().__init__()
         self._source = source
         self._blockSize = blockSize
         self._sinks = []
+        self._reporter = None
         self.Reset()
 
     def _OnDispose(self):
@@ -49,6 +58,9 @@ class Reader(Disposable):
 
     def AddSink(self, sink : BytesSink):
         self._sinks.append(sink)
+
+    def AddProgressReporter(self, reporter : ProgressReporter):
+        self._reporter = reporter
 
     def Reset(self):
         self._source.Reset()
@@ -59,6 +71,9 @@ class Reader(Disposable):
         self._source.Seek(offset, whence)
         
     def Read(self, size):
+        progress = 0
+        progressIncrement = (100 * size) / self._blockSize
+
         data = []
         while size > 0:
             count = min(size, self._blockSize)
@@ -67,6 +82,10 @@ class Reader(Disposable):
 
             for sink in self._sinks:
                 sink.Write(block)
+            
+            if self._reporter:
+                self._reporter.Progress(progress)
+                progress += progressIncrement
 
             if self._source.eof:
                 break
@@ -81,3 +100,4 @@ class Reader(Disposable):
     @property
     def eof(self):
         return self.GetIsEOF()
+   
